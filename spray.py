@@ -11,6 +11,11 @@ import logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
+def clean_ansi(text):
+    """Elimina los códigos ANSI de un texto."""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
+
 def get_netexec_users(dc_ip, username, password, domain):
     """
     Ejecuta netexec para obtener la lista de usuarios y su BadPW.
@@ -108,11 +113,13 @@ def run_kerbrute(domain, dc_ip, temp_users_file, spray_password, use_user_as_pas
         
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        logger.info(result.stdout)
+        # Limpiar el output de códigos ANSI antes de imprimir
+        cleaned_stdout = clean_ansi(result.stdout)
+        logger.info(cleaned_stdout)
     except subprocess.CalledProcessError as e:
         logger.error("Error ejecutando kerbrute: %s", e)
-        logger.error(e.stdout)
-        logger.error(e.stderr)
+        logger.error(clean_ansi(e.stdout))
+        logger.error(clean_ansi(e.stderr))
         sys.exit(1)
 
 def main():
