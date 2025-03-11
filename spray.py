@@ -143,7 +143,7 @@ def main():
     group.add_argument("--user-as-pass-up", action="store_true",
                        help="Utilizar --user-as-pass con usuario con primera letra en mayúsculas")
 
-    # NUEVO: parámetro para modo debug
+    # Parámetro para modo debug
     parser.add_argument("--debug", action="store_true",
                         help="Activar modo debug para ver información detallada.")
 
@@ -201,9 +201,13 @@ def main():
             logger.error("La lista de usuarios proporcionada está vacía.")
             sys.exit(1)
 
-    logger.info("[*] Usuarios elegibles para password spraying:")
-    for user in eligible_users:
-        logger.info(f" - {user}")
+    # Se muestra el número total de usuarios elegibles en salida INFO
+    logger.info("[*] Número de usuarios elegibles para password spraying: %d", len(eligible_users))
+    # Si se activa --debug, se listan todos los usuarios
+    if args.debug:
+        logger.debug("[*] Usuarios elegibles para password spraying:")
+        for user in eligible_users:
+            logger.debug(f" - {user}")
 
     use_user_as_pass = False
     if args.user_as_pass_low:
