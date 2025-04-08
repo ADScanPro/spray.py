@@ -379,7 +379,7 @@ def main():
         # Configuración para BloodHoundACEAnalyzer. Ajusta según tu entorno.
         bh_uri = "bolt://localhost:7687"
         bh_user = "neo4j"
-        bh_password = "Bl00dh0und"
+        bh_password = "bloodhound"
         analyzer = BloodHoundACEAnalyzer(bh_uri, bh_user, bh_password)
         # Llama a la interfaz interactiva con curses para seleccionar idioma y formato.
         smart_date_params = smart_date_menu()  # Retorna (language, format_option)
