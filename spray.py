@@ -318,7 +318,7 @@ def main():
     useraspass_parser.add_argument("-pl", help="Password para netexec (opcional)")
     useraspass_parser.add_argument("-t", type=int, default=0, help="Threshold seguro")
     useraspass_parser.add_argument("-u", required=True, help="Ruta a la lista de usuarios habilitados")
-    group_useraspass = useraspass_parser.add_mutually_exclusive_group(required=True)
+    group_useraspass = useraspass_parser.add_mutually_exclusive_group(required=False)
     group_useraspass.add_argument("--low", action="store_true", help="Utilizar user-as-pass con usuario en minúsculas")
     group_useraspass.add_argument("--up", action="store_true", help="Utilizar user-as-pass con usuario con primera letra en mayúsculas")
     useraspass_parser.add_argument("-target-domain", help="Dominio objetivo para kerbrute")
@@ -434,6 +434,9 @@ def main():
             use_user_as_pass = True
         elif args.up:
             eligible_users = [user.capitalize() for user in eligible_users]
+            use_user_as_pass = True
+        else:
+            # No case specified: use exact username as password
             use_user_as_pass = True
         temp_file = write_temp_users_file(eligible_users)
         kerbrute_domain = args.target_domain if args.target_domain else args.d
