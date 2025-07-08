@@ -24,8 +24,11 @@ def get_netexec_users(dc_ip, username, password, domain):
     Ejecuta netexec para obtener la lista de usuarios y su BadPW.
     Se utiliza grep y awk para filtrar la salida.
     """
+    # Check if the specific netexec path exists
+    netexec_path = "/root/.adscan/tool_venvs/netexec/venv/bin/nxc"
+    nxc_cmd = netexec_path if os.path.exists(netexec_path) else 'nxc'
     cmd = (
-        f"nxc smb {dc_ip} -u {username} -p {password} -d {domain} --users "
+        f"{nxc_cmd} smb {dc_ip} -u {username} -p {password} -d {domain} --users "
         "| grep -v '<never>' | awk '{print $5,$8}' | grep -v ']' | grep -v '-Username- Set-'"
     )
     try:
@@ -53,7 +56,10 @@ def get_account_lockout_threshold(dc_ip, username, password, domain):
     """
     Ejecuta netexec para extraer el account lockout threshold.
     """
-    cmd = f"nxc smb {dc_ip} -u {username} -p {password} -d {domain} --pass-pol"
+    # Check if the specific netexec path exists
+    netexec_path = "/root/.adscan/tool_venvs/netexec/venv/bin/nxc"
+    nxc_cmd = netexec_path if os.path.exists(netexec_path) else 'nxc'
+    cmd = f"{nxc_cmd} smb {dc_ip} -u {username} -p {password} -d {domain} --pass-pol"
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
