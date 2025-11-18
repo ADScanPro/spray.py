@@ -64,7 +64,7 @@ def sync_time_with_pdc(pdc_ip: str) -> bool:
 
     # Enable NTP synchronization
     try:
-        cmd_ntp = ["timedatectl", "set-ntp", "true"]
+        cmd_ntp = ["timedatectl", "set-ntp", "false"]
         logger.debug("Executing: {}", " ".join(cmd_ntp))
         result = subprocess.run(cmd_ntp, capture_output=True, text=True, check=True, timeout=10)
         logger.debug("NTP enabled successfully")
