@@ -21,6 +21,9 @@ from typing import List, Optional, Tuple, Union
 from bloodhound_cli.core.ce import BloodHoundCEClient
 from loguru import logger
 
+# Version
+__version__ = "1.0.2"
+
 # Configure Loguru logging
 logger.remove()  # Remove default handler
 logger.add(
@@ -553,6 +556,9 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(
         description="Script para realizar password spraying con kerbrute mediante subcomandos."
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}", help="Show version and exit"
     )
     subparsers = parser.add_subparsers(dest="subcommand", required=True, help="Modo de spraying")
 

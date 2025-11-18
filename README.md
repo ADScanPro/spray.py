@@ -117,6 +117,21 @@ export BH_CE_PASSWORD="Bloodhound123!"
 
 ## Usage
 
+### Check Version
+
+To check the version of the script:
+
+```bash
+./spray.py --version
+# or if installed via pipx
+spray --version
+```
+
+Output:
+```
+spray.py 1.0.1
+```
+
 ### Smart Mode (Date-based Password Generation)
 
 Intelligent password spraying using password last change dates from BloodHound CE:
