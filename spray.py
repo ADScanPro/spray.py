@@ -519,7 +519,15 @@ def run_kerbrute(
 
 
 # --- Main con subcomandos ---
-def main():
+def main() -> None:
+    """
+    Main entry point for the password spraying tool.
+
+    Parses command-line arguments and executes the appropriate spray mode:
+    - smart: Date-based password generation using BloodHound CE
+    - password: Fixed password spraying
+    - useraspass: Username-as-password spraying
+    """
     parser = argparse.ArgumentParser(
         description="Script para realizar password spraying con kerbrute mediante subcomandos."
     )
@@ -625,6 +633,23 @@ def main():
 
     # Función común para obtener usuarios elegibles (usando netexec si se proporcionan credenciales)
     def get_eligible_users(domain, users_file, dc_ip, ul, pl, threshold):
+        """
+        Get eligible users for password spraying.
+
+        If netexec credentials are provided, filters users based on account lockout threshold.
+        Otherwise, returns all users from the provided file.
+
+        Args:
+            domain: Target domain name
+            users_file: Path to file with enabled users
+            dc_ip: Domain Controller IP address
+            ul: Username for netexec (optional)
+            pl: Password for netexec (optional)
+            threshold: Safe threshold for remaining lockout attempts
+
+        Returns:
+            List of eligible usernames
+        """
         if ul and pl:
             logger.info("[*] Obteniendo Account lockout threshold del dominio...")
             account_threshold = get_account_lockout_threshold(dc_ip, ul, pl, domain)
