@@ -139,9 +139,11 @@ Intelligent password spraying using password last change dates from BloodHound C
 - `--type`: Spray type (currently only 'month')
 - `-c, --case`: Case format (lower/upper)
 - `-f, --format`: Format ID (1-10, see format options below)
-- `-v, --verbose`: Enable verbose output (more detailed information)
-- `--debug`: Enable debug mode (very detailed information, includes tracebacks)
+- `-v, --verbose`: Enable verbose output (shows INFO level messages with detailed progress)
+- `--debug`: Enable debug mode (very detailed information, includes tracebacks, DEBUG messages, and all executed commands)
 - `--kerbrute-path`: Path to kerbrute binary (if not in PATH)
+
+**Note**: By default, only warnings and errors are shown. Use `-v/--verbose` to see detailed progress information. Use `--debug` to see all executed commands (netexec, kerbrute, ntpdate, etc.).
 
 **Format Options:**
 1. `{month}{full_year}` (e.g., january2025)
@@ -175,9 +177,11 @@ Spray a fixed password against a list of users:
 - `-pl`: Password for netexec (optional, for lockout protection)
 - `-t`: Safe threshold for remaining lockout attempts (default: 0)
 - `-o, --output`: Output file for kerbrute results
-- `-v, --verbose`: Enable verbose output (more detailed information)
-- `--debug`: Enable debug mode (very detailed information, includes tracebacks)
+- `-v, --verbose`: Enable verbose output (shows INFO level messages with detailed progress)
+- `--debug`: Enable debug mode (very detailed information, includes tracebacks, DEBUG messages, and all executed commands)
 - `--kerbrute-path`: Path to kerbrute binary (if not in PATH)
+
+**Note**: By default, only warnings and errors are shown. Use `-v/--verbose` to see detailed progress information. Use `--debug` to see all executed commands (netexec, kerbrute, ntpdate, etc.).
 
 ### User-as-Pass Mode
 
@@ -204,9 +208,11 @@ Spray using usernames as passwords:
 - `--low`: Use lowercase username as password
 - `--up`: Use capitalized username as password
 - `-o, --output`: Output file for kerbrute results
-- `-v, --verbose`: Enable verbose output (more detailed information)
-- `--debug`: Enable debug mode (very detailed information, includes tracebacks)
+- `-v, --verbose`: Enable verbose output (shows INFO level messages with detailed progress)
+- `--debug`: Enable debug mode (very detailed information, includes tracebacks, DEBUG messages, and all executed commands)
 - `--kerbrute-path`: Path to kerbrute binary (if not in PATH)
+
+**Note**: By default, only warnings and errors are shown. Use `-v/--verbose` to see detailed progress information. Use `--debug` to see all executed commands (netexec, kerbrute, ntpdate, etc.).
 
 ## Account Lockout Protection
 

