@@ -250,6 +250,17 @@ This will:
   -t 2 -o domains/cicada.htb/kerberos/spray.log
 ```
 
+### Example 4: Using Custom Kerbrute Path
+
+If kerbrute is not in your PATH, specify its location:
+
+```bash
+./spray.py password -d cicada.htb --dc-ip 10.129.231.149 \
+  -u users.txt -p 'Password123!' \
+  --kerbrute-path /opt/tools/kerbrute/kerbrute \
+  -o output.log
+```
+
 ## Dependencies
 
 ### Python Dependencies
