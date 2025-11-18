@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+- Place new tests under `tests/` mirroring the source package structure (e.g., `tests/core/test_ce_client.py`).
+- Use pytest fixtures for setup/teardown; avoid using `unittest.TestCase` or global state.
+- Run `uv run pytest --maxfail=1 --disable-warnings` before marking work complete and capture failures in the task notes.
+- Prefer parametrised tests to cover multiple inputs without duplication.

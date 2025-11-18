@@ -1,0 +1,33 @@
+---
+alwaysApply: true
+---
+# Project Context Adaptation
+
+This is a simple single-script project, not a full package. Adapt rules accordingly:
+
+## Structure
+- Single script `spray.py` in project root is acceptable (no need for `src/` structure)
+- Tests can be added later if needed, but not required for MVP
+- Documentation in README.md is sufficient
+
+## Logging
+- Use `loguru` for simple, powerful logging (better than standard logging or Rich)
+- Loguru provides colored logs, automatic tracebacks, and simple API
+- Use `{}` format strings instead of `%s` formatting
+- Log at appropriate levels: DEBUG for detailed info, INFO for user-facing, ERROR for failures
+
+## Configuration
+- Environment variables are sufficient (no need for `pydantic-settings` for this simple project)
+- Use `.env.example` to document required variables
+- Support both `.env` file and environment variables
+
+## Dependencies
+- Use `pyproject.toml` for dependency management
+- Keep dependencies minimal - only what's strictly needed
+- Document external tool requirements (kerbrute, netexec) in README
+
+## Code Quality
+- Type hints: Required for all functions
+- Docstrings: Google-style for public functions
+- Error handling: Explicit try/except with proper logging
+- Timeouts: Add timeouts to all subprocess calls

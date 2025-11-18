@@ -1,0 +1,59 @@
+[project]
+name = "spray"
+version = "1.0.0"
+description = "Password spraying tool using kerbrute with smart date-based password generation via BloodHound CE"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["password-spraying", "kerbrute", "bloodhound", "active-directory", "security"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
+
+dependencies = [
+    "bloodhound-cli>=1.2.1",
+    "loguru>=0.7.0",
+]
+
+[project.scripts]
+spray = "spray:main"
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "pylint>=3.0.0",
+    "black>=23.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]  # Line too long (handled by formatter)
+
+[tool.black]
+line-length = 120
+target-version = ["py38"]
+
+[tool.pylint.main]
+max-line-length = 120
+

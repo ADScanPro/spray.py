@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+# Project Structure (Adapted for single-script project)
+
+- For this single-script project, `spray.py` in the root is acceptable.
+- If the project grows, consider moving to `src/spray/` structure.
+- Tests should go under `tests/` if added.
+- Documentation in `README.md` is sufficient for this project size.
+- Configuration files (`.env.example`, `pyproject.toml`) stay in root.

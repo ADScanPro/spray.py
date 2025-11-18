@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+- Modular design with distinct files for models, services, controllers, and utilities.
+- Follow Single Responsibility Principle.
+- Follow DRY (Don't Repeat Yourself) Principle.

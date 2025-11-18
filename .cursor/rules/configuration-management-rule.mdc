@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+# Configuration Management (Simplified for single script)
+
+- Store secrets and environment-specific values in `.env` files kept out of version control (see `.env.example` for keys to maintain).
+- For this simple script, use `os.getenv()` directly with defaults (no need for `pydantic-settings`).
+- Document all environment variables in `README.md` and update `.env.example` accordingly.
+- Support both `.env` file (via python-dotenv if needed) and direct environment variables.
