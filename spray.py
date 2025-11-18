@@ -549,7 +549,8 @@ def main():
     format_help = "\n".join([f"{k}: {v}" for k, v in available_formats.items()])
     smart_parser.add_argument("-f", "--format", type=int, choices=range(1, len(available_formats)+1),
                               help=f"ID del formato de spray. Opciones:\n{format_help}\nSi se omite, se muestra menú interactivo.")
-    smart_parser.add_argument("--debug", action="store_true", help="Activar modo debug")
+    smart_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)")
+    smart_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
 
     # Subcomando password (usa lista de usuarios y contraseña fija -p)
     password_parser = subparsers.add_parser("password",
@@ -563,7 +564,8 @@ def main():
     password_parser.add_argument("-p", required=True, help="Contraseña para password spraying (kerbrute)")
     password_parser.add_argument("-target-domain", help="Dominio objetivo para kerbrute")
     password_parser.add_argument("-o", "--output", help="Directorio donde guardar el output de kerbrute")
-    password_parser.add_argument("--debug", action="store_true", help="Activar modo debug")
+    password_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)")
+    password_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
 
     # Subcomando useraspass (usa lista de usuarios y user-as-pass)
     useraspass_parser = subparsers.add_parser("useraspass",
@@ -579,15 +581,33 @@ def main():
     group_useraspass.add_argument("--up", action="store_true", help="Utilizar user-as-pass con usuario con primera letra en mayúsculas")
     useraspass_parser.add_argument("-target-domain", help="Dominio objetivo para kerbrute")
     useraspass_parser.add_argument("-o", "--output", help="Directorio donde guardar el output de kerbrute")
-    useraspass_parser.add_argument("--debug", action="store_true", help="Activar modo debug")
+    useraspass_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)")
+    useraspass_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
 
     args = parser.parse_args()
 
-    # Configure logging if debug is enabled
+    # Configure logging based on verbosity flags
+    # Priority: debug > verbose > default (INFO)
     if args.debug:
         logger.remove()
-        logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
-        logger.debug("Debug mode enabled. Showing detailed information.")
+        logger.add(
+            sys.stderr,
+            level="DEBUG",
+            colorize=True,
+            backtrace=True,
+            diagnose=True
+        )
+        logger.debug("Debug mode enabled. Showing very detailed information.")
+    elif args.verbose:
+        logger.remove()
+        logger.add(
+            sys.stderr,
+            level="INFO",
+            colorize=True,
+            backtrace=False,
+            diagnose=False
+        )
+        logger.info("Verbose mode enabled. Showing detailed information.")
 
     # Función común para obtener usuarios elegibles (usando netexec si se proporcionan credenciales)
     def get_eligible_users(domain, users_file, dc_ip, ul, pl, threshold):
@@ -622,9 +642,6 @@ def main():
 
     # Procesar subcomandos
     if args.subcommand == "smart":
-        if args.debug:
-            logger.remove()
-            logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
         logger.info("[*] Modo smart activado. Obteniendo datos de password last change desde bloodhound-cli...")
         bh_base_url = os.getenv("BH_CE_BASE_URL", "http://localhost:8080")
         bh_username = os.getenv("BH_CE_USERNAME", "admin")
@@ -673,9 +690,6 @@ def main():
         logger.info("[*] Proceso completado en modo smart.")
 
     elif args.subcommand == "password":
-        if args.debug:
-            logger.remove()
-            logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
         logger.info("[*] Modo password activado. Procesando spraying en modo password...")
         eligible_users = get_eligible_users(args.d, args.u, args.dc_ip, args.ul, args.pl, args.t)
         logger.info(f"[*] Número de usuarios elegibles para spraying (password): {len(eligible_users)}")
@@ -689,9 +703,6 @@ def main():
         logger.info("[*] Proceso completado en modo password.")
 
     elif args.subcommand == "useraspass":
-        if args.debug:
-            logger.remove()
-            logger.add(sys.stderr, level="DEBUG", colorize=True, backtrace=True, diagnose=True)
         logger.info("[*] Modo useraspass activado. Procesando spraying en modo useraspass...")
         eligible_users = get_eligible_users(args.d, args.u, args.dc_ip, args.ul, args.pl, args.t)
         logger.info(f"[*] Número de usuarios elegibles para spraying (useraspass): {len(eligible_users)}")

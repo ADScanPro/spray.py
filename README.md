@@ -12,6 +12,7 @@ A Python tool for performing password spraying attacks using `kerbrute` with int
 - **Account Lockout Protection**: Integrates with `netexec` to check account lockout thresholds and filter eligible users
 - **Interactive Mode**: Curses-based interactive menu for selecting spray parameters
 - **Non-Interactive Mode**: Full CLI support for automation
+- **Verbose Logging**: Multiple logging levels (`-v/--verbose` and `--debug`) for detailed output
 
 ## Requirements
 
@@ -138,7 +139,8 @@ Intelligent password spraying using password last change dates from BloodHound C
 - `--type`: Spray type (currently only 'month')
 - `-c, --case`: Case format (lower/upper)
 - `-f, --format`: Format ID (1-10, see format options below)
-- `--debug`: Enable debug logging
+- `-v, --verbose`: Enable verbose output (more detailed information)
+- `--debug`: Enable debug mode (very detailed information, includes tracebacks)
 
 **Format Options:**
 1. `{month}{full_year}` (e.g., january2025)
@@ -172,7 +174,8 @@ Spray a fixed password against a list of users:
 - `-pl`: Password for netexec (optional, for lockout protection)
 - `-t`: Safe threshold for remaining lockout attempts (default: 0)
 - `-o, --output`: Output file for kerbrute results
-- `--debug`: Enable debug logging
+- `-v, --verbose`: Enable verbose output (more detailed information)
+- `--debug`: Enable debug mode (very detailed information, includes tracebacks)
 
 ### User-as-Pass Mode
 
@@ -199,7 +202,8 @@ Spray using usernames as passwords:
 - `--low`: Use lowercase username as password
 - `--up`: Use capitalized username as password
 - `-o, --output`: Output file for kerbrute results
-- `--debug`: Enable debug logging
+- `-v, --verbose`: Enable verbose output (more detailed information)
+- `--debug`: Enable debug mode (very detailed information, includes tracebacks)
 
 ## Account Lockout Protection
 
