@@ -44,6 +44,79 @@ def clean_ansi(text: str) -> str:
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
+
+def sync_time_with_pdc(pdc_ip: str) -> bool:
+    """
+    Synchronize system time with Primary Domain Controller (PDC).
+
+    This is critical for Kerberos authentication, which requires time
+    synchronization within a 5-minute window.
+
+    Args:
+        pdc_ip: IP address of the Primary Domain Controller
+
+    Returns:
+        True if synchronization was successful, False otherwise
+    """
+    logger.info("[*] Synchronizing system time with PDC {}...", pdc_ip)
+
+    # Enable NTP synchronization
+    try:
+        result = subprocess.run(
+            ["timedatectl", "set-ntp", "true"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
+        logger.debug("NTP enabled successfully")
+    except subprocess.CalledProcessError as e:
+        logger.warning(
+            "Failed to enable NTP: {}. stderr: {}",
+            e,
+            clean_ansi(e.stderr) if e.stderr else "N/A"
+        )
+        # Continue anyway, might work without it
+    except subprocess.TimeoutExpired:
+        logger.warning("timedatectl command timed out")
+    except FileNotFoundError:
+        logger.warning("timedatectl not found, skipping NTP setup")
+
+    # Synchronize with PDC using ntpdate
+    try:
+        result = subprocess.run(
+            ["ntpdate", pdc_ip],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30
+        )
+        logger.info("[+] Successfully synchronized time with PDC")
+        if result.stdout:
+            logger.debug("ntpdate output: {}", clean_ansi(result.stdout))
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(
+            "Failed to synchronize time with PDC {}: {}. stderr: {}",
+            pdc_ip,
+            e,
+            clean_ansi(e.stderr) if e.stderr else "N/A"
+        )
+        logger.warning(
+            "Time synchronization failed. Kerberos authentication may fail if "
+            "time difference exceeds 5 minutes."
+        )
+        return False
+    except subprocess.TimeoutExpired:
+        logger.error("ntpdate command timed out after 30 seconds")
+        return False
+    except FileNotFoundError:
+        logger.error(
+            "ntpdate not found. Please install ntpdate or ntp package. "
+            "Time synchronization is required for Kerberos."
+        )
+        return False
+
 def get_netexec_users(dc_ip: str, username: str, password: str, domain: str) -> List[Tuple[str, int]]:
     """
     Execute netexec to get user list with BadPwdCount.
@@ -352,6 +425,9 @@ def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str) -> None:
     Raises:
         SystemExit: If kerbrute execution fails
     """
+    # Synchronize time with PDC before running kerbrute
+    sync_time_with_pdc(dc_ip)
+
     cmd = ["kerbrute", "bruteforce", "-d", domain, "--dc", dc_ip, temp_file]
     try:
         result = subprocess.run(
@@ -407,6 +483,9 @@ def run_kerbrute(
     Raises:
         SystemExit: If kerbrute execution fails
     """
+    # Synchronize time with PDC before running kerbrute
+    sync_time_with_pdc(dc_ip)
+
     if use_user_as_pass:
         cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, "--user-as-pass", temp_users_file]
     else:

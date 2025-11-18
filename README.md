@@ -19,7 +19,17 @@ A Python tool for performing password spraying attacks using `kerbrute` with int
 - [pipx](https://github.com/pypa/pipx) (recommended for installation) or pip/uv
 - [kerbrute](https://github.com/ropnop/kerbrute) installed and in PATH
 - [netexec](https://github.com/Pennyw0rth/NetExec) (optional, for account lockout protection)
+- `ntpdate` or `ntp` package (for time synchronization with PDC)
 - BloodHound CE instance running (for `smart` mode)
+
+### System Requirements
+
+**Time Synchronization**: The tool automatically synchronizes system time with the PDC before running kerbrute. This is critical for Kerberos authentication, which requires time synchronization within a 5-minute window.
+
+Install `ntpdate` on your system:
+- **Debian/Ubuntu**: `sudo apt install ntpdate`
+- **RHEL/CentOS**: `sudo yum install ntpdate` or `sudo dnf install ntpdate`
+- **Arch Linux**: `sudo pacman -S ntp`
 
 ## Installation
 
