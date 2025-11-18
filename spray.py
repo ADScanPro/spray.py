@@ -421,7 +421,7 @@ def write_temp_spray_file(lines: List[str]) -> str:
     return tmp.name
 
 
-def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str) -> None:
+def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str, kerbrute_path: Optional[str] = None) -> None:
     """
     Execute kerbrute bruteforce using temporary file.
 
@@ -429,6 +429,7 @@ def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str) -> None:
         domain: Target domain name
         dc_ip: Domain Controller IP address
         temp_file: Path to temporary file with user:password pairs
+        kerbrute_path: Optional path to kerbrute binary (if not in PATH)
 
     Raises:
         SystemExit: If kerbrute execution fails
@@ -436,7 +437,13 @@ def run_smart_kerbrute(domain: str, dc_ip: str, temp_file: str) -> None:
     # Synchronize time with PDC before running kerbrute
     sync_time_with_pdc(dc_ip)
 
-    cmd = ["kerbrute", "bruteforce", "-d", domain, "--dc", dc_ip, temp_file]
+    # Determine kerbrute command
+    kerbrute_cmd = kerbrute_path if kerbrute_path else "kerbrute"
+    if kerbrute_path and not Path(kerbrute_path).exists():
+        logger.error("Kerbrute path does not exist: {}", kerbrute_path)
+        sys.exit(1)
+
+    cmd = [kerbrute_cmd, "bruteforce", "-d", domain, "--dc", dc_ip, temp_file]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=3600)
         logger.info(clean_ansi(result.stdout))
@@ -476,6 +483,7 @@ def run_kerbrute(
     spray_password: Optional[str],
     use_user_as_pass: bool = False,
     output_dir: Optional[str] = None,
+    kerbrute_path: Optional[str] = None,
 ) -> None:
     """
     Execute kerbrute passwordspray using user list.
@@ -487,6 +495,7 @@ def run_kerbrute(
         spray_password: Password to spray (None for bruteforce mode)
         use_user_as_pass: If True, add --user-as-pass flag
         output_dir: Optional output directory for kerbrute results
+        kerbrute_path: Optional path to kerbrute binary (if not in PATH)
 
     Raises:
         SystemExit: If kerbrute execution fails
@@ -494,13 +503,19 @@ def run_kerbrute(
     # Synchronize time with PDC before running kerbrute
     sync_time_with_pdc(dc_ip)
 
+    # Determine kerbrute command
+    kerbrute_cmd = kerbrute_path if kerbrute_path else "kerbrute"
+    if kerbrute_path and not Path(kerbrute_path).exists():
+        logger.error("Kerbrute path does not exist: {}", kerbrute_path)
+        sys.exit(1)
+
     if use_user_as_pass:
-        cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, "--user-as-pass", temp_users_file]
+        cmd = [kerbrute_cmd, "passwordspray", "-d", domain, "--dc", dc_ip, "--user-as-pass", temp_users_file]
     else:
         if spray_password:
-            cmd = ["kerbrute", "passwordspray", "-d", domain, "--dc", dc_ip, temp_users_file, spray_password]
+            cmd = [kerbrute_cmd, "passwordspray", "-d", domain, "--dc", dc_ip, temp_users_file, spray_password]
         else:
-            cmd = ["kerbrute", "bruteforce", "-d", domain, "--dc", dc_ip, temp_users_file]
+            cmd = [kerbrute_cmd, "bruteforce", "-d", domain, "--dc", dc_ip, temp_users_file]
     if output_dir:
         cmd.extend(["-o", output_dir])
     try:
@@ -577,6 +592,7 @@ def main() -> None:
         "-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)"
     )
     smart_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
+    smart_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
 
     # Subcomando password (usa lista de usuarios y contraseña fija -p)
     password_parser = subparsers.add_parser(
@@ -595,6 +611,7 @@ def main() -> None:
         "-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)"
     )
     password_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
+    password_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
 
     # Subcomando useraspass (usa lista de usuarios y user-as-pass)
     useraspass_parser = subparsers.add_parser(
@@ -617,6 +634,7 @@ def main() -> None:
         "-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)"
     )
     useraspass_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
+    useraspass_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
 
     args = parser.parse_args()
 
@@ -733,6 +751,7 @@ def main() -> None:
             spray_password,
             use_user_as_pass=use_user_as_pass,
             output_dir=args.output,
+            kerbrute_path=getattr(args, "kerbrute_path", None),
         )
         os.remove(temp_file)
         logger.info("[*] Proceso completado en modo smart.")
@@ -747,7 +766,13 @@ def main() -> None:
         kerbrute_domain = args.target_domain if args.target_domain else args.d
         logger.info("[*] Ejecutando kerbrute en modo password...")
         run_kerbrute(
-            kerbrute_domain, args.dc_ip, temp_file, args.p, use_user_as_pass=use_user_as_pass, output_dir=args.output
+            kerbrute_domain,
+            args.dc_ip,
+            temp_file,
+            args.p,
+            use_user_as_pass=use_user_as_pass,
+            output_dir=args.output,
+            kerbrute_path=getattr(args, "kerbrute_path", None),
         )
         os.remove(temp_file)
         logger.info("[*] Proceso completado en modo password.")
@@ -770,7 +795,13 @@ def main() -> None:
         kerbrute_domain = args.target_domain if args.target_domain else args.d
         logger.info("[*] Ejecutando kerbrute en modo useraspass...")
         run_kerbrute(
-            kerbrute_domain, args.dc_ip, temp_file, None, use_user_as_pass=use_user_as_pass, output_dir=args.output
+            kerbrute_domain,
+            args.dc_ip,
+            temp_file,
+            None,
+            use_user_as_pass=use_user_as_pass,
+            output_dir=args.output,
+            kerbrute_path=getattr(args, "kerbrute_path", None),
         )
         os.remove(temp_file)
         logger.info("[*] Proceso completado en modo useraspass.")

@@ -141,6 +141,7 @@ Intelligent password spraying using password last change dates from BloodHound C
 - `-f, --format`: Format ID (1-10, see format options below)
 - `-v, --verbose`: Enable verbose output (more detailed information)
 - `--debug`: Enable debug mode (very detailed information, includes tracebacks)
+- `--kerbrute-path`: Path to kerbrute binary (if not in PATH)
 
 **Format Options:**
 1. `{month}{full_year}` (e.g., january2025)
@@ -176,6 +177,7 @@ Spray a fixed password against a list of users:
 - `-o, --output`: Output file for kerbrute results
 - `-v, --verbose`: Enable verbose output (more detailed information)
 - `--debug`: Enable debug mode (very detailed information, includes tracebacks)
+- `--kerbrute-path`: Path to kerbrute binary (if not in PATH)
 
 ### User-as-Pass Mode
 
@@ -204,6 +206,7 @@ Spray using usernames as passwords:
 - `-o, --output`: Output file for kerbrute results
 - `-v, --verbose`: Enable verbose output (more detailed information)
 - `--debug`: Enable debug mode (very detailed information, includes tracebacks)
+- `--kerbrute-path`: Path to kerbrute binary (if not in PATH)
 
 ## Account Lockout Protection
 
