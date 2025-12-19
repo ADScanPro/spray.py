@@ -22,7 +22,7 @@ from bloodhound_cli.core.ce import BloodHoundCEClient
 from loguru import logger
 
 # Version
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 # Configure Loguru logging
 logger.remove()  # Remove default handler
@@ -544,7 +544,7 @@ def run_kerbrute(
         sys.exit(1)
 
 
-# --- Main con subcomandos ---
+# --- Main with subcommands ---
 def main() -> None:
     """
     Main entry point for the password spraying tool.
@@ -555,32 +555,32 @@ def main() -> None:
     - useraspass: Username-as-password spraying
     """
     parser = argparse.ArgumentParser(
-        description="Script para realizar password spraying con kerbrute mediante subcomandos."
+        description="Script to perform password spraying with kerbrute using subcommands."
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}", help="Show version and exit"
     )
-    subparsers = parser.add_subparsers(dest="subcommand", required=True, help="Modo de spraying")
+    subparsers = parser.add_subparsers(dest="subcommand", required=True, help="Spraying mode")
 
-    # Subcomando smart (modo smart-date)
+    # Smart subcommand (smart-date mode)
     smart_parser = subparsers.add_parser(
-        "smart", help="Spraying inteligente (smart-date) usando bloodhound-cli; no requiere -u ni -p"
+        "smart", help="Smart spraying (smart-date) using bloodhound-cli; does not require -u or -p"
     )
-    smart_parser.add_argument("-d", required=True, help="Dominio (usado para bloodhound-cli y kerbrute)")
-    smart_parser.add_argument("--dc-ip", required=True, help="IP del Domain Controller (PDC)")
-    smart_parser.add_argument("-ul", help="Username para netexec (opcional)")
-    smart_parser.add_argument("-pl", help="Password para netexec (opcional)")
-    smart_parser.add_argument("-t", type=int, default=0, help="Threshold seguro")
-    smart_parser.add_argument("-target-domain", help="Dominio objetivo para kerbrute")
-    smart_parser.add_argument("-o", "--output", help="Directorio donde guardar el output de kerbrute")
-    # Parámetros para uso no interactivo (todos deben especificarse o ninguno)
-    smart_parser.add_argument("--lang", choices=["English", "Spanish"], help="Idioma para spray: English o Spanish")
-    smart_parser.add_argument("--type", choices=["month"], help="Tipo de spray (por ahora, solo 'month')")
+    smart_parser.add_argument("-d", required=True, help="Domain (used for bloodhound-cli and kerbrute)")
+    smart_parser.add_argument("--dc-ip", required=True, help="Domain Controller IP address (PDC)")
+    smart_parser.add_argument("-ul", help="Username for netexec (optional)")
+    smart_parser.add_argument("-pl", help="Password for netexec (optional)")
+    smart_parser.add_argument("-t", type=int, default=0, help="Safe threshold")
+    smart_parser.add_argument("-target-domain", help="Target domain for kerbrute")
+    smart_parser.add_argument("-o", "--output", help="Directory to save kerbrute output")
+    # Parameters for non-interactive use (all must be specified or none)
+    smart_parser.add_argument("--lang", choices=["English", "Spanish"], help="Language for spray: English or Spanish")
+    smart_parser.add_argument("--type", choices=["month"], help="Spray type (currently only 'month')")
     smart_parser.add_argument(
         "-c",
         "--case",
         choices=["lower", "upper"],
-        help="Presentación del tipo: 'lower' para minúsculas o 'upper' para mayúsculas",
+        help="Type presentation: 'lower' for lowercase or 'upper' for uppercase",
     )
     available_formats = {
         1: "{type}{full_year}",
@@ -600,7 +600,7 @@ def main() -> None:
         "--format",
         type=int,
         choices=range(1, len(available_formats) + 1),
-        help=f"ID del formato de spray. Opciones:\n{format_help}\nSi se omite, se muestra menú interactivo.",
+        help=f"Spray format ID. Options:\n{format_help}\nIf omitted, interactive menu is shown.",
     )
     smart_parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)"
@@ -608,42 +608,42 @@ def main() -> None:
     smart_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
     smart_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
 
-    # Subcomando password (usa lista de usuarios y contraseña fija -p)
+    # Password subcommand (uses user list and fixed password -p)
     password_parser = subparsers.add_parser(
-        "password", help="Spraying con contraseña fija; requiere lista de usuarios (-u) y contraseña (-p)"
+        "password", help="Fixed password spraying; requires user list (-u) and password (-p)"
     )
-    password_parser.add_argument("-d", required=True, help="Dominio (usado para netexec y kerbrute)")
-    password_parser.add_argument("--dc-ip", required=True, help="IP del Domain Controller (PDC)")
-    password_parser.add_argument("-ul", help="Username para netexec (opcional)")
-    password_parser.add_argument("-pl", help="Password para netexec (opcional)")
-    password_parser.add_argument("-t", type=int, default=0, help="Threshold seguro")
-    password_parser.add_argument("-u", required=True, help="Ruta a la lista de usuarios habilitados")
-    password_parser.add_argument("-p", required=True, help="Contraseña para password spraying (kerbrute)")
-    password_parser.add_argument("-target-domain", help="Dominio objetivo para kerbrute")
-    password_parser.add_argument("-o", "--output", help="Directorio donde guardar el output de kerbrute")
+    password_parser.add_argument("-d", required=True, help="Domain (used for netexec and kerbrute)")
+    password_parser.add_argument("--dc-ip", required=True, help="Domain Controller IP address (PDC)")
+    password_parser.add_argument("-ul", help="Username for netexec (optional)")
+    password_parser.add_argument("-pl", help="Password for netexec (optional)")
+    password_parser.add_argument("-t", type=int, default=0, help="Safe threshold")
+    password_parser.add_argument("-u", required=True, help="Path to enabled users list")
+    password_parser.add_argument("-p", required=True, help="Password for password spraying (kerbrute)")
+    password_parser.add_argument("-target-domain", help="Target domain for kerbrute")
+    password_parser.add_argument("-o", "--output", help="Directory to save kerbrute output")
     password_parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)"
     )
     password_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
     password_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
 
-    # Subcomando useraspass (usa lista de usuarios y user-as-pass)
+    # Useraspass subcommand (uses user list and user-as-pass)
     useraspass_parser = subparsers.add_parser(
-        "useraspass", help="Spraying con user-as-pass; requiere lista de usuarios (-u) y opción --low o --up"
+        "useraspass", help="User-as-pass spraying; requires user list (-u) and --low or --up option"
     )
-    useraspass_parser.add_argument("-d", required=True, help="Dominio (usado para netexec y kerbrute)")
-    useraspass_parser.add_argument("--dc-ip", required=True, help="IP del Domain Controller (PDC)")
-    useraspass_parser.add_argument("-ul", help="Username para netexec (opcional)")
-    useraspass_parser.add_argument("-pl", help="Password para netexec (opcional)")
-    useraspass_parser.add_argument("-t", type=int, default=0, help="Threshold seguro")
-    useraspass_parser.add_argument("-u", required=True, help="Ruta a la lista de usuarios habilitados")
+    useraspass_parser.add_argument("-d", required=True, help="Domain (used for netexec and kerbrute)")
+    useraspass_parser.add_argument("--dc-ip", required=True, help="Domain Controller IP address (PDC)")
+    useraspass_parser.add_argument("-ul", help="Username for netexec (optional)")
+    useraspass_parser.add_argument("-pl", help="Password for netexec (optional)")
+    useraspass_parser.add_argument("-t", type=int, default=0, help="Safe threshold")
+    useraspass_parser.add_argument("-u", required=True, help="Path to enabled users list")
     group_useraspass = useraspass_parser.add_mutually_exclusive_group(required=False)
-    group_useraspass.add_argument("--low", action="store_true", help="Utilizar user-as-pass con usuario en minúsculas")
+    group_useraspass.add_argument("--low", action="store_true", help="Use user-as-pass with lowercase username")
     group_useraspass.add_argument(
-        "--up", action="store_true", help="Utilizar user-as-pass con usuario con primera letra en mayúsculas"
+        "--up", action="store_true", help="Use user-as-pass with first letter capitalized username"
     )
-    useraspass_parser.add_argument("-target-domain", help="Dominio objetivo para kerbrute")
-    useraspass_parser.add_argument("-o", "--output", help="Directorio donde guardar el output de kerbrute")
+    useraspass_parser.add_argument("-target-domain", help="Target domain for kerbrute")
+    useraspass_parser.add_argument("-o", "--output", help="Directory to save kerbrute output")
     useraspass_parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output (more detailed information)"
     )
@@ -663,7 +663,7 @@ def main() -> None:
         logger.add(sys.stderr, level="INFO", colorize=True, backtrace=False, diagnose=False)
         logger.info("Verbose mode enabled. Showing detailed information.")
 
-    # Función común para obtener usuarios elegibles (usando netexec si se proporcionan credenciales)
+    # Common function to get eligible users (using netexec if credentials are provided)
     def get_eligible_users(domain, users_file, dc_ip, ul, pl, threshold):
         """
         Get eligible users for password spraying.
@@ -683,16 +683,16 @@ def main() -> None:
             List of eligible usernames
         """
         if ul and pl:
-            logger.info("[*] Obteniendo Account lockout threshold del dominio...")
+            logger.info("[*] Getting Account lockout threshold from domain...")
             account_threshold = get_account_lockout_threshold(dc_ip, ul, pl, domain)
-            logger.info(f"[*] Account lockout threshold obtenido: {account_threshold}")
+            logger.info(f"[*] Account lockout threshold obtained: {account_threshold}")
             if isinstance(account_threshold, int):
-                logger.info("[*] Obteniendo usuarios y su BadPW con netexec...")
+                logger.info("[*] Getting users and their BadPW with netexec...")
                 netexec_users = get_netexec_users(dc_ip, ul, pl, domain)
                 if not netexec_users:
-                    logger.error("No se obtuvieron usuarios de netexec.")
+                    logger.error("No users obtained from netexec.")
                     sys.exit(1)
-                logger.info("[*] Leyendo lista de usuarios habilitados...")
+                logger.info("[*] Reading enabled users list...")
                 file_users = read_enabled_users(users_file)
                 eligible = []
                 for user, badpw in netexec_users:
@@ -702,10 +702,10 @@ def main() -> None:
                             eligible.append(user)
                         else:
                             logger.debug(
-                                f"[-] Usuario {user} no elegible. BadPW: {badpw}, intentos restantes: {remaining}"
+                                f"[-] User {user} not eligible. BadPW: {badpw}, remaining attempts: {remaining}"
                             )
                 if not eligible:
-                    logger.info("No hay usuarios elegibles según el threshold seguro.")
+                    logger.info("No eligible users according to safe threshold.")
                     sys.exit(0)
                 return eligible
             else:
@@ -713,19 +713,19 @@ def main() -> None:
         else:
             return list(read_enabled_users(users_file))
 
-    # Procesar subcomandos
+    # Process subcommands
     if args.subcommand == "smart":
-        logger.info("[*] Modo smart activado. Obteniendo datos de password last change desde bloodhound-cli...")
+        logger.info("[*] Smart mode activated. Getting password last change data from bloodhound-cli...")
         bh_base_url = os.getenv("BH_CE_BASE_URL", "http://localhost:8080")
         bh_username = os.getenv("BH_CE_USERNAME", "admin")
         bh_password = os.getenv("BH_CE_PASSWORD", "Bloodhound123!")
         analyzer = BloodHoundCEClient(base_url=bh_base_url)
         # Ensure valid token (authenticate if needed)
         if not analyzer.ensure_valid_token():
-            logger.info(f"[*] Autenticando con BloodHound CE usando usuario: {bh_username}")
+            logger.info(f"[*] Authenticating with BloodHound CE using user: {bh_username}")
             token = analyzer.authenticate(bh_username, bh_password)
             if not token:
-                logger.error("[!] Error al autenticar con BloodHound CE. Verifica las credenciales.")
+                logger.error("[!] Error authenticating with BloodHound CE. Verify credentials.")
                 sys.exit(1)
         # Si se especifican --lang, --type, --case y --format, se usan directamente
         if args.lang and args.type and args.case and (args.format is not None):
@@ -742,22 +742,22 @@ def main() -> None:
                 10: f"{{{args.type}}}{{year_short}}!",
             }
             if args.format not in available_formats:
-                logger.error("Formato ID no válido.")
+                logger.error("Invalid format ID.")
                 sys.exit(1)
             smart_params = (args.lang, args.case, available_formats[args.format])
         else:
             smart_params = smart_date_menu()  # (language, month_case, spray_format_option)
-        logger.info(f"[*] Se seleccionó: {smart_params}")
+        logger.info(f"[*] Selected: {smart_params}")
         data = analyzer.get_password_last_change(args.d)
         eligible_users = [record["samaccountname"] for record in data]
         spray_list = generate_spray_list(analyzer, args.d, smart_params)
         analyzer.close()
-        logger.info(f"[*] Número de usuarios para spraying (smart): {len(eligible_users)}")
+        logger.info(f"[*] Number of users for spraying (smart): {len(eligible_users)}")
         temp_file = write_temp_spray_file(spray_list)
         spray_password = None
         use_user_as_pass = False
         kerbrute_domain = args.target_domain if args.target_domain else args.d
-        logger.info("[*] Ejecutando kerbrute en modo smart...")
+        logger.info("[*] Executing kerbrute in smart mode...")
         run_kerbrute(
             kerbrute_domain,
             args.dc_ip,
@@ -768,17 +768,17 @@ def main() -> None:
             kerbrute_path=getattr(args, "kerbrute_path", None),
         )
         os.remove(temp_file)
-        logger.info("[*] Proceso completado en modo smart.")
+        logger.info("[*] Process completed in smart mode.")
 
     elif args.subcommand == "password":
-        logger.info("[*] Modo password activado. Procesando spraying en modo password...")
+        logger.info("[*] Password mode activated. Processing spraying in password mode...")
         eligible_users = get_eligible_users(args.d, args.u, args.dc_ip, args.ul, args.pl, args.t)
-        logger.info(f"[*] Número de usuarios elegibles para spraying (password): {len(eligible_users)}")
+        logger.info(f"[*] Number of eligible users for spraying (password): {len(eligible_users)}")
         spray_list = [f"{user}:{args.p}" for user in eligible_users]
         temp_file = write_temp_users_file(eligible_users)
         use_user_as_pass = False
         kerbrute_domain = args.target_domain if args.target_domain else args.d
-        logger.info("[*] Ejecutando kerbrute en modo password...")
+        logger.info("[*] Executing kerbrute in password mode...")
         run_kerbrute(
             kerbrute_domain,
             args.dc_ip,
@@ -789,12 +789,12 @@ def main() -> None:
             kerbrute_path=getattr(args, "kerbrute_path", None),
         )
         os.remove(temp_file)
-        logger.info("[*] Proceso completado en modo password.")
+        logger.info("[*] Process completed in password mode.")
 
     elif args.subcommand == "useraspass":
-        logger.info("[*] Modo useraspass activado. Procesando spraying en modo useraspass...")
+        logger.info("[*] Useraspass mode activated. Processing spraying in useraspass mode...")
         eligible_users = get_eligible_users(args.d, args.u, args.dc_ip, args.ul, args.pl, args.t)
-        logger.info(f"[*] Número de usuarios elegibles para spraying (useraspass): {len(eligible_users)}")
+        logger.info(f"[*] Number of eligible users for spraying (useraspass): {len(eligible_users)}")
         use_user_as_pass = False
         if args.low:
             eligible_users = [user.lower() for user in eligible_users]
@@ -807,7 +807,7 @@ def main() -> None:
             use_user_as_pass = True
         temp_file = write_temp_users_file(eligible_users)
         kerbrute_domain = args.target_domain if args.target_domain else args.d
-        logger.info("[*] Ejecutando kerbrute en modo useraspass...")
+        logger.info("[*] Executing kerbrute in useraspass mode...")
         run_kerbrute(
             kerbrute_domain,
             args.dc_ip,
@@ -818,7 +818,7 @@ def main() -> None:
             kerbrute_path=getattr(args, "kerbrute_path", None),
         )
         os.remove(temp_file)
-        logger.info("[*] Proceso completado en modo useraspass.")
+        logger.info("[*] Process completed in useraspass mode.")
 
 
 if __name__ == "__main__":
