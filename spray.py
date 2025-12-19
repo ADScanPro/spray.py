@@ -188,11 +188,11 @@ def get_account_lockout_threshold(dc_ip: str, username: str, password: str, doma
         logger.debug("Executing netexec command: {}", cmd)
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True, timeout=300)
     except subprocess.CalledProcessError as e:
-        logger.error(
-            "Error executing netexec to get lockout policy: {}. stderr: {}",
-            e,
-            clean_ansi(e.stderr) if e.stderr else "N/A",
-        )
+        logger.error("Error executing netexec to get lockout policy: {}", e)
+        if e.stdout:
+            logger.error("netexec stdout: {}", clean_ansi(e.stdout))
+        if e.stderr:
+            logger.error("netexec stderr: {}", clean_ansi(e.stderr))
         sys.exit(1)
     except subprocess.TimeoutExpired:
         logger.error("Netexec command timed out after 300 seconds")
@@ -208,6 +208,8 @@ def get_account_lockout_threshold(dc_ip: str, username: str, password: str, doma
             return value
     else:
         logger.error("Could not extract Account lockout threshold from domain.")
+        logger.error("netexec stdout: {}", clean_ansi(result.stdout) if result.stdout else "N/A")
+        logger.error("netexec stderr: {}", clean_ansi(result.stderr) if result.stderr else "N/A")
         sys.exit(1)
 
 
