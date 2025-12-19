@@ -11,6 +11,8 @@ import argparse
 import curses
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,7 +24,7 @@ from bloodhound_cli.core.ce import BloodHoundCEClient
 from loguru import logger
 
 # Version
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 # Configure Loguru logging
 logger.remove()  # Remove default handler
@@ -48,6 +50,48 @@ def clean_ansi(text: str) -> str:
     """
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     return ansi_escape.sub("", text)
+
+
+def _resolve_nxc_cmd(nxc_path: Optional[str] = None) -> str:
+    """Resolve the NetExec command to use.
+
+    Resolution order:
+      1) Explicit CLI arg (``--nxc-path``)
+      2) Env override: ``ADSCAN_NXC_PATH``
+      3) ADscan-managed venv under ``$ADSCAN_HOME``: ``tool_venvs/netexec/venv/bin/nxc``
+      4) ``nxc`` or ``netexec`` found in PATH
+      5) Fallback: ``nxc`` (so the error is clear to the user)
+    """
+    candidates: List[str] = []
+    if nxc_path:
+        candidates.append(os.path.expanduser(nxc_path))
+
+    env_override = os.getenv("ADSCAN_NXC_PATH")
+    if env_override:
+        candidates.append(os.path.expanduser(env_override))
+
+    adscan_home = os.getenv("ADSCAN_HOME")
+    if adscan_home:
+        candidates.append(
+            str(
+                Path(os.path.expanduser(adscan_home))
+                / "tool_venvs"
+                / "netexec"
+                / "venv"
+                / "bin"
+                / "nxc"
+            )
+        )
+
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+
+    which_cmd = shutil.which("nxc") or shutil.which("netexec")
+    if which_cmd:
+        return which_cmd
+
+    return "nxc"
 
 
 def sync_time_with_pdc(pdc_ip: str) -> bool:
@@ -109,7 +153,14 @@ def sync_time_with_pdc(pdc_ip: str) -> bool:
         return False
 
 
-def get_netexec_users(dc_ip: str, username: str, password: str, domain: str) -> List[Tuple[str, int]]:
+def get_netexec_users(
+    dc_ip: str,
+    username: str,
+    password: str,
+    domain: str,
+    *,
+    nxc_cmd: str,
+) -> List[Tuple[str, int]]:
     """
     Execute netexec to get user list with BadPwdCount.
 
@@ -127,11 +178,9 @@ def get_netexec_users(dc_ip: str, username: str, password: str, domain: str) -> 
     Raises:
         SystemExit: If netexec execution fails
     """
-    # Check if the specific netexec path exists
-    netexec_path = "/root/.adscan/tool_venvs/netexec/venv/bin/nxc"
-    nxc_cmd = netexec_path if os.path.exists(netexec_path) else "nxc"
     cmd = (
-        f"{nxc_cmd} smb {dc_ip} -u '{username}' -p '{password}' -d {domain} --users "
+        f"{shlex.quote(nxc_cmd)} smb {shlex.quote(dc_ip)} "
+        f"-u {shlex.quote(username)} -p {shlex.quote(password)} -d {shlex.quote(domain)} --users "
         "| grep -v '<never>' | awk '{print $5,$8}' | grep -v ']' | grep -v '-Username- Set-'"
     )
     try:
@@ -164,7 +213,14 @@ def get_netexec_users(dc_ip: str, username: str, password: str, domain: str) -> 
     return users
 
 
-def get_account_lockout_threshold(dc_ip: str, username: str, password: str, domain: str) -> Union[int, str]:
+def get_account_lockout_threshold(
+    dc_ip: str,
+    username: str,
+    password: str,
+    domain: str,
+    *,
+    nxc_cmd: str,
+) -> Union[int, str]:
     """
     Execute netexec to extract account lockout threshold.
 
@@ -180,10 +236,10 @@ def get_account_lockout_threshold(dc_ip: str, username: str, password: str, doma
     Raises:
         SystemExit: If netexec execution fails or threshold cannot be found
     """
-    # Check if the specific netexec path exists
-    netexec_path = "/root/.adscan/tool_venvs/netexec/venv/bin/nxc"
-    nxc_cmd = netexec_path if os.path.exists(netexec_path) else "nxc"
-    cmd = f"{nxc_cmd} smb {dc_ip} -u '{username}' -p '{password}' -d {domain} --pass-pol"
+    cmd = (
+        f"{shlex.quote(nxc_cmd)} smb {shlex.quote(dc_ip)} "
+        f"-u {shlex.quote(username)} -p {shlex.quote(password)} -d {shlex.quote(domain)} --pass-pol"
+    )
     try:
         logger.debug("Executing netexec command: {}", cmd)
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True, timeout=300)
@@ -609,6 +665,7 @@ def main() -> None:
     )
     smart_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
     smart_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
+    smart_parser.add_argument("--nxc-path", help="Path to nxc/netexec binary (if not in PATH)")
 
     # Password subcommand (uses user list and fixed password -p)
     password_parser = subparsers.add_parser(
@@ -628,6 +685,7 @@ def main() -> None:
     )
     password_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
     password_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
+    password_parser.add_argument("--nxc-path", help="Path to nxc/netexec binary (if not in PATH)")
 
     # Useraspass subcommand (uses user list and user-as-pass)
     useraspass_parser = subparsers.add_parser(
@@ -651,8 +709,11 @@ def main() -> None:
     )
     useraspass_parser.add_argument("--debug", action="store_true", help="Enable debug mode (very detailed information)")
     useraspass_parser.add_argument("--kerbrute-path", help="Path to kerbrute binary (if not in PATH)")
+    useraspass_parser.add_argument("--nxc-path", help="Path to nxc/netexec binary (if not in PATH)")
 
     args = parser.parse_args()
+
+    nxc_cmd = _resolve_nxc_cmd(getattr(args, "nxc_path", None))
 
     # Configure logging based on verbosity flags
     # Priority: debug > verbose > default (INFO)
@@ -686,11 +747,15 @@ def main() -> None:
         """
         if ul and pl:
             logger.info("[*] Getting Account lockout threshold from domain...")
-            account_threshold = get_account_lockout_threshold(dc_ip, ul, pl, domain)
+            account_threshold = get_account_lockout_threshold(
+                dc_ip, ul, pl, domain, nxc_cmd=nxc_cmd
+            )
             logger.info(f"[*] Account lockout threshold obtained: {account_threshold}")
             if isinstance(account_threshold, int):
                 logger.info("[*] Getting users and their BadPW with netexec...")
-                netexec_users = get_netexec_users(dc_ip, ul, pl, domain)
+                netexec_users = get_netexec_users(
+                    dc_ip, ul, pl, domain, nxc_cmd=nxc_cmd
+                )
                 if not netexec_users:
                     logger.error("No users obtained from netexec.")
                     sys.exit(1)
@@ -710,10 +775,8 @@ def main() -> None:
                     logger.info("No eligible users according to safe threshold.")
                     sys.exit(0)
                 return eligible
-            else:
-                return list(read_enabled_users(users_file))
-        else:
             return list(read_enabled_users(users_file))
+        return list(read_enabled_users(users_file))
 
     # Process subcommands
     if args.subcommand == "smart":

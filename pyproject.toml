@@ -1,6 +1,6 @@
 [project]
 name = "spray"
-version = "1.0.3"
+version = "1.0.4"
 description = "Password spraying tool using kerbrute with smart date-based password generation via BloodHound CE"
 readme = "README.md"
 requires-python = ">=3.8"
